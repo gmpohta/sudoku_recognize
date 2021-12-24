@@ -1,13 +1,6 @@
 import operator
-
-import win32gui
-import copy
-import sys
 import numpy as np
 import cv2
-import time
-import pyautogui
-import matplotlib.pyplot as plt
 
 class Ex_not_recognize(Exception):
     def __init__(self):
