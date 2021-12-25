@@ -37,21 +37,23 @@ class Recognize_Sudoku():
 
     def find_h_lines(self,lines,edges_image):
         '''
-            @param lines - лист всех распознанных линий!!!!!!!!!!!!!!!
-            @param edges_image - двухцветное изображение на котором распознаем судоку'''
+        From lines select horizontal lines that belong to sudoku
+        :param lines: list of all recognized sudoku lines. lines has the structure like [[[x1,y1,x2,y2]],...]
+        :param edges_image: black and white image on which we recognize sudoku: np.array
+        :return out: contains horizontal lines that belong to sudoku. out has the structure like [[x1,y1,x2,y2],....]
+        '''
         h_lines=[] #List with horizontal lines for intermediate calculation
-        out=[]  # Output list, contains horizontal lines
-        #h_lines like [x1,y1,x2,y2]
+        out=[]
 
         for ii in range(len(lines)):
-            x1=int(lines[ii][0][0]) #Coordinates of the beginning of the horizontal line
+            x1=int(lines[ii][0][0]) #Coordinates of the beginning of the line
             x2=int(lines[ii][0][2]) #ending
 
             y_u=int(lines[ii][0][1]-2) # To determine the number of intersections,
-            y_d=int(lines[ii][0][1]+2)# select two parallel lines shifted up and down by 2 pixels
+            y_d=int(lines[ii][0][1]+2)# Select two parallel lines shifted up and down by 2 pixels
 
-            # чтобы определить принадлежит ли линия судоку считаем число переходов с черное на белое вдоль линии
-            #сдвинутой вверх на 2 пикселя
+            #To determine if the line belongs to sudoku,  We count the number of transitions from black to white along the line:
+            #for line shifted up by 2 pixels
             prev_pixel=0
             count_u=0
             if y_u>=0:
@@ -60,7 +62,7 @@ class Recognize_Sudoku():
                         count_u+=1
                     prev_pixel=jj
 
-            #то же для линии сдвинутой вниз
+            #The same for line shifted down by 2 pixels
             prev_pixel=0
             count_d=0
             if y_d<edges_image.shape[0]:
@@ -69,29 +71,28 @@ class Recognize_Sudoku():
                         count_d+=1
                     prev_pixel=jj
 
-            expression=count_u>=self.n_count_min or count_d>=self.n_count_min  #число переходов с черное на белое хотя бы для одой линии должно быть не меньше n_count_min
-            expression=expression and count_d<=self.n_count_max and count_u<=self.n_count_max #число переходов с черное на белое обязательно для 2 линий должно быть меньше чем n_count_max
-            # чтобы отсечь линии не связанные с судоку
-            expression = expression and lines[ii][0][1]==lines[ii][0][3] #проверка является ли линия горизонтальной
-            expression=expression and ((lines[ii][0][0]-lines[ii][0][2])**2+(lines[ii][0][1]-lines[ii][0][3])**2)**0.5<=self.maxLineLength  #Проверка на длину линии
+            expression=count_u>=self.n_count_min or count_d>=self.n_count_min  #The number of transitions from black to white for at least one line must be at least then n_count_min
+            expression=expression and count_d<=self.n_count_max and count_u<=self.n_count_max #The number of transitions from black to white for both lines must be less than n_count_max
+            expression = expression and lines[ii][0][1]==lines[ii][0][3] #Checking if the line is horizontal
+            expression=expression and ((lines[ii][0][0]-lines[ii][0][2])**2+(lines[ii][0][1]-lines[ii][0][3])**2)**0.5<=self.maxLineLength  #Max line length check
             if expression:
                 h_lines.append(lines[ii][0])
-        h_lines=sorted(h_lines,key=operator.itemgetter(1)) # сортируем линии так чтобы они возрастали по координате y
+        h_lines=sorted(h_lines,key=operator.itemgetter(1)) # Sort the lines so that they increase along the y-coordinate
 
-        #возможна ситуация когда толстая линия распознается как несколько рядом лежащих линий их нужно отсортировать
+        #A situation is possible when a thick line is recognized as several adjacent lines, they need to be sorted
         ii=0
-        while (ii<len(h_lines)-1): #по всем линиям кроме последней
+        while (ii<len(h_lines)-1): #For each lines except last
             if abs(h_lines[ii][1]-h_lines[ii+1][1])<=self.DY:
-                #если соседние линии различаются меньше чем на DY то считаем их одной линией mid_lines
+                #If nearby lines shifted by less than DY then we consider them as one line  mid_lines
                 mid_lines=h_lines[ii]
-                mid_lines[1]=h_lines[ii][1]/2+h_lines[ii+1][1]/2 # "y" координаты mid_lines заменяем средними значениями
+                mid_lines[1]=h_lines[ii][1]/2+h_lines[ii+1][1]/2 # y-coordinate mid_lines replace with the mean
                 mid_lines[3]=h_lines[ii][3]/2+h_lines[ii+1][3]/2
                 out.append(mid_lines)
-                ii+=2  # если объединили 2 линии в одну то следующую линию уже не рассматриваем
+                ii+=2  # If 2 lines are combined into one, then the next line is not considered
             else:
                 out.append(h_lines[ii])
                 ii+=1
-        #для последней линии
+        #For the last line
         if abs(h_lines[-1][1]-h_lines[-2][1])<=self.DY:
             mid_lines=h_lines[-1]
             mid_lines[1]=h_lines[-1][1]/2+h_lines[-2][1]/2
@@ -102,21 +103,24 @@ class Recognize_Sudoku():
         return out
 
     def find_v_lines(self,lines,edges_image):
-        #lines - лист всех распознанных линий!!!!!!!!!!!!!!
-        #edges_image - двухцветное изображение на котором распознаем судоку
-        v_lines=[]  #лист с вертикальными линиями для промежуточных расчетов
-        out=[]  # выходной лист с вертикальными линиями
-        #v_lines и out имеют формат [x1,y1,x2,y2]
+        '''
+        From lines select vertical lines that belong to sudoku
+        :param lines: list of all recognized sudoku lines. lines has the structure like [[[x1,y1,x2,y2]],...]
+        :param edges_image: black and white image on which we recognize sudoku: np.array
+        :return out: output list contains vertical lines that belong to sudoku. out has the structure like [[x1,y1,x2,y2],.....]
+        '''
+        v_lines=[]  #List with vertical lines for intermediate calculation
+        out=[]
 
         for ii in range(len(lines)):
-            y1=int(lines[ii][0][1])  #начало вертикальной линии
-            y2=int(lines[ii][0][3])  #конец
+            y1=int(lines[ii][0][1])  #Coordinates of the beginning of the line
+            y2=int(lines[ii][0][3])  #ending
 
-            x_l=int(lines[ii][0][0]-2)  # чтобы определить число пересечений выберем
-            x_r=int(lines[ii][0][0]+2)  # две парралельные сдвинутые влево и вправо на 2 пикселя линии
+            x_l=int(lines[ii][0][0]-2)  # To determine the number of intersections,
+            x_r=int(lines[ii][0][0]+2)  # Select two parallel lines shifted right and left by 2 pixels
 
-            # чтобы определить принадлежит ли линия судоку считаем число переходов с черное на белое вдоль линии
-            #сдвинутой влево на 2 пикселя
+            #To determine if the line belongs to sudoku,  We count the number of transitions from black to white along the line:
+            #for line shifted to the left by 2 pixels
             prev_pixel=0
             count_l=0
             if x_l>=0:
@@ -125,7 +129,7 @@ class Recognize_Sudoku():
                         count_l+=1
                     prev_pixel=jj
 
-            #то же для линии сдвинутой вправо
+            #The same for line shifted to the right  by 2 pixels
             prev_pixel=0
             count_r=0
             if x_r<edges_image.shape[1]:
@@ -134,22 +138,22 @@ class Recognize_Sudoku():
                         count_r+=1
                     prev_pixel=jj
 
-            # чтобы отсечь линии не связанные с судоку
-            expression=count_l>=self.n_count_min or count_r>=self.n_count_min  #число переходов с черное на белое хотя бы для одой линии должно быть не меньше n_count_min
-            expression=expression and count_l<=self.n_count_max and count_r<=self.n_count_max  #число переходов с черное на белое обязательно для 2 линий должно быть меньше чем n_count_max
+            # To discard non-sudoku lines
+            expression=count_l>=self.n_count_min or count_r>=self.n_count_min  #The number of transitions from black to white for at least one line must be at least then n_count_min
+            expression=expression and count_l<=self.n_count_max and count_r<=self.n_count_max  #The number of transitions from black to white for both lines must be less than n_count_max
             expression=expression and lines[ii][0][0]==lines[ii][0][2]  #Сheck the line is vertical
             expression=expression and ((lines[ii][0][0]-lines[ii][0][2])**2+(lines[ii][0][1]-lines[ii][0][3])**2)**0.5<=self.maxLineLength # Check for max line length
             if expression:
                 v_lines.append(lines[ii][0])
         v_lines=sorted(v_lines,key=operator.itemgetter(0))  # Sort the lines so that their "x" coordinates increase
 
-        #возможна ситуация когда толстая линия распознается как несколько рядом лежащих линий их нужно отфильтровать
+        #A situation is possible when a thick line is recognized as several adjacent lines, they need to be sorted
         ii=0
         while (ii<len(v_lines)-1):  #For each lines except the last
             if abs(v_lines[ii][0]-v_lines[ii+1][0])<=self.DX:
-                #если соседние линии различаются меньше чем на DX то считаем из одной линией mid_lines
+                #If nearby lines shifted by less than DX then we consider them as one line  mid_lines
                 mid_lines=v_lines[ii]
-                mid_lines[0]=v_lines[ii][0]/2+v_lines[ii+1][0]/2  # x координаты mid_lines заменяем средними значениями
+                mid_lines[0]=v_lines[ii][0]/2+v_lines[ii+1][0]/2  # x-coordinate mid_lines replace with the mean
                 mid_lines[2]=v_lines[ii][2]/2+v_lines[ii+1][2]/2
                 out.append(mid_lines)
                 ii+=2  # If 2 lines are combined into one, then the next line is not considered
@@ -167,8 +171,12 @@ class Recognize_Sudoku():
         return out
 
     def get_coordinates(self,h_lines,v_lines):
-        # The function determines the coordinates of the intersections of vertical and horizontal lines
-        #Output!!!!!!!!!!!!!
+        '''
+        The function determines the coordinates of the intersections of vertical and horizontal lines
+        :param h_lines: list contains hoisontal lines that belong to sudoku. h_lines has the structure like [[x1,y1,x2,y2],....]
+        :param v_lines: list contains vertical lines that belong to sudoku.  v_lines has the structure like [[x1,y1,x2,y2],....]
+        :return:
+        '''
         coordx=np.zeros((self.SIZE,self.SIZE),dtype=int)
         coordy=np.zeros((self.SIZE,self.SIZE),dtype=int)
         # coordx and coordy lists have a structure similar to the "np.meshgrid" function's output arrays
@@ -179,9 +187,12 @@ class Recognize_Sudoku():
         return coordx,coordy
 
     def compare_digit(self,in_img):
-        #Recognition of a digit in the input image in_img
-        #Recognition occurs by minimizing the difference between the input digit image and the reference digit image
-        #Output!!!!!!!!!!!
+        '''
+        Recognition of a digit in the input image in_img
+        Recognition occurs by minimizing the difference between the input digit image and the reference digit image
+        :param in_img: np.array black and white image
+        :return:
+        '''
         diff=np.zeros(self.SIZE-1,dtype=float)
         for num in range(self.SIZE-1): #For each digits from 0 to 9
             for ii in range(self.out_size):
@@ -191,7 +202,11 @@ class Recognize_Sudoku():
         return min(enumerate(diff), key=operator.itemgetter(1))[0]+1
 
     def recognize_lines(self,gray):
-        #Main function for recognizing sudoku lines
+        '''
+        Function for recognizing sudoku lines
+        :param gray:
+        :return:
+        '''
         edges=cv2.Canny(gray,threshold1=90,threshold2=350,apertureSize=3) ###переводим в двухцветное для распознование линий!!
         #Recognize all lines, lines list have format [[[x1,y1,x2,y2]],...[[x1,y1,x2,y2]],...]
         lines=cv2.HoughLinesP(edges,rho=self.drho,theta=self.dtheta,threshold=self.level,minLineLength=self.minLineLength,maxLineGap=self.maxLineGap)
@@ -216,8 +231,15 @@ class Recognize_Sudoku():
         coordx,coordy=self.get_coordinates(h_lines,v_lines)
         return coordx,coordy,h_lines,v_lines
 
-    def recognize_contours(self,gray,coordx,coordy):
-        #!!!!!!!!!!!!!!!
+    def recognize_digits(self,gray,coordx,coordy):
+        '''
+        Function for recognizing sudoku digits
+        :param gray:
+        :param coordx:
+        :param coordy:
+        :return:
+        '''
+
         ret, thresh = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)####по другому переводим в двухцветное изображение для распознования цифр!!!
         img_erode = cv2.erode(thresh, np.ones((2, 2), np.uint8), iterations=1)
 
@@ -261,8 +283,13 @@ class Recognize_Sudoku():
         return arr_recognizes_digits
 
     def recognize_sudoku(self,screen):
-        #функция распознания судоку
-        out_puzzle=np.zeros((self.SIZE-1,self.SIZE-1))  # Output array with recognized digits, 0 corresponds to no digit
+        '''
+        Sudoku recognition function.
+        Combines the function for recognizing sudoku lines and the function for recognizing sudoku digits
+        :param screen:
+        :return:
+        '''
+        out_puzzle=np.zeros((self.SIZE-1,self.SIZE-1))  # Output array with recognized digits, 0 matches an empty field
         gray=cv2.cvtColor(screen,cv2.COLOR_BGR2GRAY)
 
         try:
@@ -281,7 +308,7 @@ class Recognize_Sudoku():
                 cv2.line(img,(x1,y1),(x2,y2),(0,0,255),2)
         cv2.imshow("output",img)  #Input image with recognized lines
         ###
-        recognizes_digits=self.recognize_contours(gray,coordx,coordy)
+        recognizes_digits=self.recognize_digits(gray,coordx,coordy)
         for ii in range(self.SIZE-1):
             for jj in range(self.SIZE-1):
                 try:
@@ -291,7 +318,11 @@ class Recognize_Sudoku():
         return out_puzzle,coordx,coordy
 
     def save_reference_digit(self,screen):
-        #This function is needed to save the reference digits for each specific sudoku
+        '''
+        This function is needed to save the reference digits for each specific sudoku
+        :param screen:
+        :return:
+        '''
         gray=cv2.cvtColor(screen,cv2.COLOR_BGR2GRAY)
         try:
             coordx,coordy,_,_=self.recognize_lines(gray)
@@ -299,7 +330,7 @@ class Recognize_Sudoku():
             print(expt.text)
             return None
 
-        recognizes_digits=self.recognize_contours(gray,coordx,coordy)
+        recognizes_digits=self.recognize_digits(gray,coordx,coordy)
         for ii in range(self.SIZE-1):
             for jj in range(self.SIZE-1):
                 try:
