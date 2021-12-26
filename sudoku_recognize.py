@@ -6,9 +6,13 @@ class Ex_not_recognize(Exception):
     def __init__(self):
         self.text="Sudoku was not recognized!!!"
 
+class Ex_not_ref_digit(Exception):
+    def __init__(self):
+        self.text="No reference digits!!!\nYou must first get them with a function Recognize_Sudoku.save_reference_digits."
+
 class Recognize_Sudoku():
     def __init__(self,DX=15,DY=15,n_count_max=48,n_count_min=28,maxLineLength = 650,
-                 minLineLength = 280,maxLineGap = 20,dtheta=np.pi/400,drho=1,level=10,out_size=28):
+                 minLineLength = 280,maxLineGap = 20,dtheta=np.pi/400,drho=1,level=10):
         self.DX=DX #Max distance (in pixels) between 2 vertical lines. If distance between 2 lines less DX than 2 lines are counted as one line
         self.DY=DY #Max distance (in pixels) between 2 horizontal lines. If distance between 2 lines less DY than 2 lines are counted as one line
         self.n_count_max=n_count_max # Maximum number of line crossings with other lines. It used to whether a line belongs to sudoku
@@ -24,16 +28,21 @@ class Recognize_Sudoku():
         self.drho=drho#Resolution for distance
         self.level=level#Accumulator threshold parameter. Only those lines are returned that get enough votes
 
-        self.out_size=out_size#Resolution to which we convert the sudoku recognizing digits for pixel-by-pixel comparison
+        self.out_size=28#Resolution to which we convert the sudoku recognizing digits for pixel-by-pixel comparison - constant
 
         self.arr_digits=[]#List of images, reference digits for pixel-by-pixel comparison
-        for ii in range(1,self.SIZE):
-            #Load digits images
-            #With these images we will compare the numbers that need to be recognized pixel by pixel.
-            img=cv2.imread(str(ii)+'.png')
-            gray=cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
-            ret,thresh=cv2.threshold(gray,0,255,cv2.THRESH_BINARY)
-            self.arr_digits.append(thresh)
+        try:
+            for ii in range(1,self.SIZE):
+                #Load digits images
+                #With these images we will compare the numbers that need to be recognized pixel by pixel.
+                img=cv2.imread(str(ii)+'.png')
+                gray=cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+                ret,thresh=cv2.threshold(gray,0,255,cv2.THRESH_BINARY)
+                self.arr_digits.append(thresh)
+        except:
+            expt=Ex_not_ref_digit()
+            print(expt.text)
+            raise expt
 
     def find_h_lines(self,lines,edges_image):
         '''
@@ -175,7 +184,7 @@ class Recognize_Sudoku():
         The function determines the coordinates of the intersections of vertical and horizontal lines
         :param h_lines: list contains hoisontal lines that belong to sudoku. h_lines has the structure like [[x1,y1,x2,y2],....]
         :param v_lines: list contains vertical lines that belong to sudoku.  v_lines has the structure like [[x1,y1,x2,y2],....]
-        :return:
+        :return coordx, coordy: two np.array(SiZE,SIZE) are the coordinates of the sudoku lines.
         '''
         coordx=np.zeros((self.SIZE,self.SIZE),dtype=int)
         coordy=np.zeros((self.SIZE,self.SIZE),dtype=int)
@@ -188,10 +197,11 @@ class Recognize_Sudoku():
 
     def compare_digit(self,in_img):
         '''
-        Recognition of a digit in the input image in_img
-        Recognition occurs by minimizing the difference between the input digit image and the reference digit image
-        :param in_img: np.array black and white image
-        :return:
+        Recognition of a digit in the input image in_img.
+        Recognition occurs by minimizing the difference between the input digit image and the reference digit image.
+
+        :param in_img: black and white image (np.array), is the contour around the digit
+        :return: recognized digit
         '''
         diff=np.zeros(self.SIZE-1,dtype=float)
         for num in range(self.SIZE-1): #For each digits from 0 to 9
@@ -204,10 +214,11 @@ class Recognize_Sudoku():
     def recognize_lines(self,gray):
         '''
         Function for recognizing sudoku lines
-        :param gray:
-        :return:
+        :param gray: the input cv2 grayscale image (np.array) is a sudoku that needs to be recognized
+        :return h_lines, v_lines: two lists contains hoisontal and vertical lines that belong to sudoku. h_lines and v_lines have the structure like [[x1,y1,x2,y2],....]
+        :return coordx, coordy: two np.array(SiZE,SIZE) are the coordinates of the sudoku lines.
         '''
-        edges=cv2.Canny(gray,threshold1=90,threshold2=350,apertureSize=3) ###переводим в двухцветное для распознование линий!!
+        edges=cv2.Canny(gray,threshold1=90,threshold2=350,apertureSize=3) # Convert to black and white
         #Recognize all lines, lines list have format [[[x1,y1,x2,y2]],...[[x1,y1,x2,y2]],...]
         lines=cv2.HoughLinesP(edges,rho=self.drho,theta=self.dtheta,threshold=self.level,minLineLength=self.minLineLength,maxLineGap=self.maxLineGap)
 
@@ -231,16 +242,16 @@ class Recognize_Sudoku():
         coordx,coordy=self.get_coordinates(h_lines,v_lines)
         return coordx,coordy,h_lines,v_lines
 
-    def recognize_digits(self,gray,coordx,coordy):
+    def recognize_contours(self,gray,coordx,coordy):
         '''
         Function for recognizing sudoku digits
-        :param gray:
-        :param coordx:
-        :param coordy:
-        :return:
+        :param gray:  the input cv2 grayscale image (np.array) is a sudoku that needs to be recognized
+        :param coordx: np.array(SiZE,SIZE) are the x-coordinates of the sudoku lines.
+        :param coordy: np.array(SiZE,SIZE) are the y-coordinates of the sudoku lines.
+        :return: list of black and white images, is the contours around the digits. If there is no number in the Sudoku square, list element will be None
         '''
 
-        ret, thresh = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)####по другому переводим в двухцветное изображение для распознования цифр!!!
+        ret, thresh = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)# Convert to black and white
         img_erode = cv2.erode(thresh, np.ones((2, 2), np.uint8), iterations=1)
 
         #Output list with images of numbers that need to be recognized
@@ -255,30 +266,30 @@ class Recognize_Sudoku():
                 x2=coordx[ii+1,jj+1]
                 y1=coordy[ii,jj]
                 y2=coordy[ii+1,jj+1]
-                # Recognize the contours around the numbers, pre-select the recognition area in the form of a Sudoku square
+                # Recognize the contours around the numbers, pre-select the recognition area in the form of a sudoku square
                 contours,hierarchy=cv2.findContours(thresh[y1:y2,x1:x2],cv2.RETR_TREE,cv2.CHAIN_APPROX_NONE)
 
-                if len(contours)!=1:#####!!!!!!!!!!!!!!!!!!
-                    for idx, contour in enumerate(contours):
-                        (x_rec,y_rec,w,h)=cv2.boundingRect(contour) #Get the coordinates of the rectangle around the digit
-                        if hierarchy[0][idx][3] == 0:######!!!!!!!!!!!!!!
-                            #Select the area around the number, this image still needs to be brought to resolution  out_size x out_size
-                            dig_crop = thresh[y1+y_rec:y1+y_rec + h, x1+x_rec:x1+x_rec + w]
-                            #Convert the image to square with a resolution size_max x size_max
-                            size_max = max(w, h)
-                            dig_square = 255 * np.ones(shape=[size_max, size_max], dtype=np.uint8)
-                            if w > h:
-                                # Enlarge image top-bottom (fill white)
-                                y_pos = size_max // 2 - h // 2
-                                dig_square[y_pos:y_pos + h, 0:w] = dig_crop
-                            elif w < h:
-                                # Enlarge image left-right (fill white)
-                                x_pos = size_max // 2 - w // 2
-                                dig_square[0:h, x_pos:x_pos + w] = dig_crop
-                            else:
-                                dig_square = dig_crop
-                            # Resize digit to out_size x out_size
-                            arr_recognizes_digits[ii][jj]=cv2.resize(dig_square, (self.out_size, self.out_size), interpolation=cv2.INTER_AREA)
+                for idx, contour in enumerate(contours):
+                    (x_rec,y_rec,w,h)=cv2.boundingRect(contour) #Get the coordinates of the rectangle around the digit
+                    # Select only those contours that have a parent contour (parent contour is the contour around the sudoku square)
+                    if hierarchy[0][idx][3] == 0:
+                        #Select the area around the number, this image still needs to be brought to resolution  out_size x out_size
+                        dig_crop = thresh[y1+y_rec:y1+y_rec + h, x1+x_rec:x1+x_rec + w]
+                        #Convert the image to square with a resolution size_max x size_max
+                        size_max = max(w, h)
+                        dig_square = 255 * np.ones(shape=[size_max, size_max], dtype=np.uint8)
+                        if w > h:
+                            # Enlarge image top-bottom (fill white)
+                            y_pos = size_max // 2 - h // 2
+                            dig_square[y_pos:y_pos + h, 0:w] = dig_crop
+                        elif w < h:
+                            # Enlarge image left-right (fill white)
+                            x_pos = size_max // 2 - w // 2
+                            dig_square[0:h, x_pos:x_pos + w] = dig_crop
+                        else:
+                            dig_square = dig_crop
+                        # Resize digit to out_size x out_size
+                        arr_recognizes_digits[ii][jj]=cv2.resize(dig_square, (self.out_size, self.out_size), interpolation=cv2.INTER_AREA)
 
         return arr_recognizes_digits
 
@@ -286,8 +297,9 @@ class Recognize_Sudoku():
         '''
         Sudoku recognition function.
         Combines the function for recognizing sudoku lines and the function for recognizing sudoku digits
-        :param screen:
-        :return:
+        :param screen: the input cv2 image (np.array) is a sudoku that needs to be recognized
+        :return out_puzzle:  list contains the Sudoku numbers.
+        :return coordx, coordy: two np.array(SIZE,SIZE) are the coordinates of the sudoku lines.
         '''
         out_puzzle=np.zeros((self.SIZE-1,self.SIZE-1))  # Output array with recognized digits, 0 matches an empty field
         gray=cv2.cvtColor(screen,cv2.COLOR_BGR2GRAY)
@@ -307,21 +319,22 @@ class Recognize_Sudoku():
             for x1,y1,x2,y2 in [l]:
                 cv2.line(img,(x1,y1),(x2,y2),(0,0,255),2)
         cv2.imshow("output",img)  #Input image with recognized lines
-        ###
-        recognizes_digits=self.recognize_digits(gray,coordx,coordy)
+        # Recognize contours around numbers. If there is no number in the Sudoku square, it will be None
+        recognizes_contours=self.recognize_contours(gray,coordx,coordy)
         for ii in range(self.SIZE-1):
             for jj in range(self.SIZE-1):
                 try:
-                    out_puzzle[ii,jj]=self.compare_digit(recognizes_digits[ii][jj])
+                    out_puzzle[ii,jj]=self.compare_digit(recognizes_contours[ii][jj])# Recognize the digits
                 except TypeError:
                     pass
         return out_puzzle,coordx,coordy
 
-    def save_reference_digit(self,screen):
+    def save_reference_digits(self,screen):
         '''
         This function is needed to save the reference digits for each specific sudoku
-        :param screen:
-        :return:
+        :param screen: the input cv2 image (np.array) is a sudoku that needs to be recognized
+        :return: None
+        This function recognizes and saves all sudoku digits in resolution out_size x out_size
         '''
         gray=cv2.cvtColor(screen,cv2.COLOR_BGR2GRAY)
         try:
@@ -330,10 +343,10 @@ class Recognize_Sudoku():
             print(expt.text)
             return None
 
-        recognizes_digits=self.recognize_digits(gray,coordx,coordy)
+        recognizes_contours=self.recognize_contours(gray,coordx,coordy)
         for ii in range(self.SIZE-1):
             for jj in range(self.SIZE-1):
                 try:
-                    cv2.imwrite('new'+str(ii)+'_'+str(jj)+'.png',recognizes_digits[ii][jj])
+                    cv2.imwrite('new'+str(ii)+'_'+str(jj)+'.png',recognizes_contours[ii][jj])
                 except cv2.error:
                     pass
