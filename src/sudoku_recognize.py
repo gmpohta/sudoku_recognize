@@ -2,6 +2,8 @@ import operator
 import numpy as np
 import cv2
 
+referent_digit_folder = './data/referent_digits/'
+
 class Ex_not_recognize(Exception):
     def __init__(self):
         self.text="Sudoku was not recognized!!!"
@@ -35,7 +37,7 @@ class Recognize_Sudoku():
             for ii in range(1,self.SIZE):
                 #Load digits images
                 #With these images we will compare the numbers that need to be recognized pixel by pixel.
-                img=cv2.imread(str(ii)+'.png')
+                img=cv2.imread(referent_digit_folder + str(ii) + '.png')
                 gray=cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
                 ret,thresh=cv2.threshold(gray,0,255,cv2.THRESH_BINARY)
                 self.arr_digits.append(thresh)
